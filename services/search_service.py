@@ -8,10 +8,12 @@ from rank_bm25 import BM25Okapi
 import faiss
 from collections import Counter
 from sklearn.preprocessing import normalize
+from services.word2vec_representation import Word2VecRepresentation
 
 class SearchService:
     def __init__(self):
         self.processor = TextProcessor()
+        self.word2vecRep = Word2VecRepresentation()
         self.word2vec_loaded = False
         self.tfidf_cache = {}
         self.word2vec_cache = {}
@@ -460,44 +462,56 @@ class SearchService:
 
     def search_word2vec(self, query: str, dataset_name: str, top_k=5, with_additional=False):
         self.load_word2vec_assets(dataset_name)
+
+
         tokens = self.processor.normalize(query)
 
-        query_vector = np.mean(
-            [self.w2v_model.wv[w] for w in tokens if w in self.w2v_model.wv]
-            or [np.zeros(self.w2v_model.vector_size)],
-            axis=0,
-        ).astype("float32")
+        
 
-        if with_additional:
-            index, doc_ids, doc_texts = self.load_faiss_assets(dataset_name)
-            faiss.normalize_L2(query_vector.reshape(1, -1))
-            distances, neighbors = index.search(np.array([query_vector]), top_k)
+        query_vector = self.word2vecRep.vectorize(tokens)
 
-            return [
-                {
-                    "doc_id": doc_ids[i],
-                    "text": doc_texts[i],
-                    "score": float(distances[0][idx])
-                }
-                for idx, i in enumerate(neighbors[0])
-            ]
-        else:
-            doc_ids, doc_texts, matrix = self.doc_ids, self.doc_texts, self.w2v_matrix
 
-            # Normalize query_vector and matrix rows
-            query_norm = query_vector / (np.linalg.norm(query_vector) + 1e-10)
-            matrix_norms = np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10
-            matrix_normalized = matrix / matrix_norms
+        print(query_vector)
 
-            similarities = np.dot(matrix_normalized, query_norm)
+        results = self.w2v_model.wv.most_similiar(tokens , topn=10)
 
-            top_indices = np.argpartition(-similarities, top_k - 1)[:top_k]
-            top_indices = top_indices[np.argsort(-similarities[top_indices])]  # sort top_k results
+        return results
+        # query_vector = np.mean(
+        #     [self.w2v_model.wv[w] for w in tokens if w in self.w2v_model.wv]
+        #     or [np.zeros(self.w2v_model.vector_size)],
+        #     axis=0,
+        # ).astype("float32")
 
-            return [
-                {"doc_id": doc_ids[i], "text": doc_texts[i], "score": float(similarities[i])}
-                for i in top_indices
-            ]
+        # if with_additional:
+        #     index, doc_ids, doc_texts = self.load_faiss_assets(dataset_name)
+        #     faiss.normalize_L2(query_vector.reshape(1, -1))
+        #     distances, neighbors = index.search(np.array([query_vector]), top_k)
+
+        #     return [
+        #         {
+        #             "doc_id": doc_ids[i],
+        #             "text": doc_texts[i],
+        #             "score": float(distances[0][idx])
+        #         }
+        #         for idx, i in enumerate(neighbors[0])
+        #     ]
+        # else:
+        #     doc_ids, doc_texts, matrix = self.doc_ids, self.doc_texts, self.w2v_matrix
+
+        #     # Normalize query_vector and matrix rows
+        #     query_norm = query_vector / (np.linalg.norm(query_vector) + 1e-10)
+        #     matrix_norms = np.linalg.norm(matrix, axis=1, keepdims=True) + 1e-10
+        #     matrix_normalized = matrix / matrix_norms
+
+        #     similarities = np.dot(matrix_normalized, query_norm)
+
+        #     top_indices = np.argpartition(-similarities, top_k - 1)[:top_k]
+        #     top_indices = top_indices[np.argsort(-similarities[top_indices])]  # sort top_k results
+
+        #     return [
+        #         {"doc_id": doc_ids[i], "text": doc_texts[i], "score": float(similarities[i])}
+        #         for i in top_indices
+        #     ]
 
     # def search_hybrid(self, query: str, dataset_name: str, top_k=5, alpha=0.5, with_index=False):
     #     vectorizer, tfidf_matrix, doc_ids, doc_texts = self.load_tfidf_assets(dataset_name)

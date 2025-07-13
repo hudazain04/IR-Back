@@ -289,10 +289,10 @@ def run_search_for_all_algorithms(dataset_name, top_k=10):
     db.close()  # Close this session because only used for reading queries
 
     search_variants = [
-        # {"algo": "word2vec", "with_index": False, "with_additional": False, "label": "word2vec_plain"},
+        {"algo": "word2vec", "with_index": False, "with_additional": False, "label": "word2vec_plain"},
         # {"algo": "hybrid", "with_index": False, "with_additional": False, "label": "hybrid_plain"},
         # {"algo": "hybrid", "with_index": False, "with_additional": True,  "label": "hybrid_faiss"},
-        {"algo": "bm25", "with_index": False, "with_additional": False, "label": "bm25"},
+        # {"algo": "bm25", "with_index": False, "with_additional": False, "label": "bm25"},
     ]
 
     for config in search_variants:
