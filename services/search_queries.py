@@ -383,7 +383,10 @@ def run_search_for_all_algorithms(dataset_name, top_k=10):
     db.close()
 
     search_variants = [
-        {"algo": "word2vec", "with_index": False, "with_additional": False, "label": "word2vec_plain"},
+        # {"algo": "word2vec", "with_index": False, "with_additional": False, "label": "word2vec_plain"},
+        # {"algo": "word2vec", "with_index": False, "with_additional": True,  "label": "word2vec_faiss"},
+        {"algo": "hybrid", "with_index": False, "with_additional": False, "label": "hybrid_plain"},
+        # {"algo": "hybrid", "with_index": False, "with_additional": True,  "label": "hybrid_faiss"},
         # Add other algorithms here
     ]
 
