@@ -9,8 +9,7 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
-def load_qrels_to_db(dataset_name):
-    db: Session = SessionLocal()
+def load_qrels_to_db(dataset_name , db):
     dataset = ir_datasets.load(dataset_name)
 
     count = 0

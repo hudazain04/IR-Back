@@ -3,16 +3,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 
-# DATABASE_URL = "sqlite:///data/ir_data.db"
+DATABASE_URL = "mysql+pymysql://root@localhost:3306/ir_data"
 
-# engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-
-SQLALCHEMY_DATABASE_URL = "sqlite:///D:/huda1/IR/IR-Project/data/ir_data.db"
-
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
-
+engine = create_engine(DATABASE_URL, echo=False ,  pool_size=20,      
+    max_overflow=30,      
+    pool_pre_ping=True,   
+    pool_recycle=3600 ) 
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

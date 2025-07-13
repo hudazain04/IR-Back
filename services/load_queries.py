@@ -8,8 +8,7 @@ from fastapi import APIRouter
 router = APIRouter()
 
 
-def load_queries_to_db(dataset_name):
-    db: Session = SessionLocal()
+def load_queries_to_db(dataset_name , db : Session):
     print("Starting query load...")
 
     dataset = ir_datasets.load(dataset_name)
@@ -29,7 +28,7 @@ def load_queries_to_db(dataset_name):
 
         if count % 50 == 0:
             print(f"Inserted {count} queries so far...")
-            # query_repo.commit(db)
+            query_repo.commit(db)
 
     query_repo.commit(db)
     print(f"✅ All {count} queries inserted into DB.")

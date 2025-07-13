@@ -10,5 +10,5 @@ router = APIRouter()
 
 @router.post("/load_queries/{datasetName}")
 def load_queries_api(dataset_name: str, db: Session = Depends(get_db)):
-    return  load_queries_to_db(dataset_name),
+    return  load_queries_to_db(dataset_name , db),
      

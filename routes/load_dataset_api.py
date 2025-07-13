@@ -11,7 +11,5 @@ Base.metadata.create_all(bind=engine)
 
 @router.post("/load-dataset/{datasetName}")
 def load_dataset_api(dataset_name: str, db: Session = Depends(get_db)):
-    return StreamingResponse(
-            load_dataset(dataset_name, db),
-            media_type="text/event-stream",
-        )
+    return load_dataset(dataset_name, db),
+          
