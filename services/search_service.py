@@ -418,64 +418,83 @@ class SearchService:
     #         for i in top_indices
     #     ]
 
+    # def search_word2vec(self, query: str, dataset_name: str, top_k=5, with_additional=False):
+    #     self.load_word2vec_assets(dataset_name)
+    #     tokens = self.processor.normalize(query)
+        
+    #     query_vector = np.mean(
+    #         [self.w2v_model.wv[w] for w in tokens if w in self.w2v_model.wv]
+    #         or [np.zeros(self.w2v_model.vector_size)],
+    #         axis=0,
+    #     ).astype("float32")
+
+    #     # if with_additional:
+    #     #     # Use FAISS
+    #     #     index, doc_ids, doc_texts = self.load_faiss_assets(dataset_name)
+    #     #     distances, neighbors = index.search(np.array([query_vector]), top_k)
+    #     if with_additional:
+    #         index, doc_ids, doc_texts = self.load_faiss_assets(dataset_name)
+    #         faiss.normalize_L2(query_vector.reshape(1, -1))
+    #         distances, neighbors = index.search(np.array([query_vector]), top_k)
+
+
+    #         return[
+    #             {
+    #                 "doc_id": doc_ids[i],
+    #                 "text": doc_texts[i],
+    #                 # "distance": float(distances[0][idx]),
+    #                 # "score": float(1 / (1 + distances[0][idx]))  # optional conversion to similarity
+    #                  "score": float(distances[0][idx])
+    #             }
+    #             for idx, i in enumerate(neighbors[0])
+    #         ]
+    #     else:
+    #         # Use cosine similarity with raw matrix
+    #         doc_ids, doc_texts, matrix = self.doc_ids, self.doc_texts, self.w2v_matrix
+    #         similarities = cosine_similarity([query_vector], matrix).flatten()
+    #         top_indices = similarities.argsort()[::-1][:top_k]
+
+    #         return [
+    #             {"doc_id": doc_ids[i], "text": doc_texts[i], "score": float(similarities[i])}
+    #             for i in top_indices
+    #         ]
+
+
     def search_word2vec(self, query: str, dataset_name: str, top_k=5, with_additional=False):
         self.load_word2vec_assets(dataset_name)
+
+
         tokens = self.processor.normalize(query)
-        
-        query_vector = np.mean(
-            [self.w2v_model.wv[w] for w in tokens if w in self.w2v_model.wv]
-            or [np.zeros(self.w2v_model.vector_size)],
-            axis=0,
-        ).astype("float32")
-
-        # if with_additional:
-        #     # Use FAISS
-        #     index, doc_ids, doc_texts = self.load_faiss_assets(dataset_name)
-        #     distances, neighbors = index.search(np.array([query_vector]), top_k)
-        if with_additional:
-            index, doc_ids, doc_texts = self.load_faiss_assets(dataset_name)
-            faiss.normalize_L2(query_vector.reshape(1, -1))
-            distances, neighbors = index.search(np.array([query_vector]), top_k)
 
 
-            return[
-                {
-                    "doc_id": doc_ids[i],
-                    "text": doc_texts[i],
-                    # "distance": float(distances[0][idx]),
-                    # "score": float(1 / (1 + distances[0][idx]))  # optional conversion to similarity
-                     "score": float(distances[0][idx])
-                }
-                for idx, i in enumerate(neighbors[0])
-            ]
+        vectors = [self.w2v_model.wv[word] for word in tokens if word in self.w2v_model.wv]
+
+        if vectors:
+            query_vector = np.mean(vectors, axis=0)
         else:
-            # Use cosine similarity with raw matrix
-            doc_ids, doc_texts, matrix = self.doc_ids, self.doc_texts, self.w2v_matrix
-            similarities = cosine_similarity([query_vector], matrix).flatten()
-            top_indices = similarities.argsort()[::-1][:top_k]
+            query_vector = np.zeros(self.w2v_model.vector_size)
 
-            return [
-                {"doc_id": doc_ids[i], "text": doc_texts[i], "score": float(similarities[i])}
+        query_vector = query_vector.reshape(1, -1)
+
+
+        similarities = np.dot(self.w2v_matrix , query_vector.T).flatten()
+
+        top_indices = np.argsort(similarities)[::-1][:top_k]
+
+        return [
+                {"doc_id": self.doc_ids[i], "text": self.doc_texts[i], "score": float(similarities[i])}
                 for i in top_indices
             ]
 
 
-    # def search_word2vec(self, query: str, dataset_name: str, top_k=5, with_additional=False):
-    #     self.load_word2vec_assets(dataset_name)
+        # query_vector = self.word2vecRep.vectorize(tokens)
 
 
-    #     tokens = self.processor.normalize(query)
+        # print(query_vector)
 
-        
+        # results = self.w2v_model.wv.most_similiar(tokens , topn=10)
 
-    #     query_vector = self.word2vecRep.vectorize(tokens)
-
-
-    #     print(query_vector)
-
-    #     results = self.w2v_model.wv.most_similiar(tokens , topn=10)
-
-    #     return results
+        # return results
         # query_vector = np.mean(
         #     [self.w2v_model.wv[w] for w in tokens if w in self.w2v_model.wv]
         #     or [np.zeros(self.w2v_model.vector_size)],
