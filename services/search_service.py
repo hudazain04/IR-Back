@@ -476,6 +476,21 @@ class SearchService:
 
         query_vector = query_vector.reshape(1, -1)
 
+        if with_additional:
+        # Use FAISS for fast similarity search
+            index, doc_ids, doc_texts = self.load_faiss_assets(dataset_name)
+
+            # Normalize query vector for cosine similarity (inner product)
+            faiss.normalize_L2(query_vector)
+            
+            # Search top_k similar documents
+            D, I = index.search(query_vector, top_k)
+
+            return [
+                {"doc_id": doc_ids[i], "text": doc_texts[i], "score": float(D[0][rank])}
+                for rank, i in enumerate(I[0])
+            ]
+
 
         similarities = np.dot(self.w2v_matrix , query_vector.T).flatten()
 
