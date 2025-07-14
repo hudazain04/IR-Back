@@ -9,6 +9,7 @@ from repositories import document_repo
 import time
 
 router = APIRouter()
+
 def load_dataset(dataset_name: str, db: Session):
     try:
         dataset = ir_datasets.load(dataset_name)
@@ -18,7 +19,11 @@ def load_dataset(dataset_name: str, db: Session):
 
     processor = TextProcessor()
     count = 0
-    MAX_DOCS = 330_000
+    MAX_DOCS = 500_000
+    BATCH_SIZE = 500
+    buffer = []
+
+    start_time = time.time()
 
     for doc in dataset.docs_iter():
         if count >= MAX_DOCS:
@@ -27,19 +32,31 @@ def load_dataset(dataset_name: str, db: Session):
         raw = doc.text
         processed = " ".join(processor.normalize(raw))
 
-        document = Document(
-            doc_id=doc.doc_id,
-            raw_text=raw,
-            processed_text=processed,
-            source=dataset_name,
-        )
+        buffer.append({
+            "doc_id": doc.doc_id,
+            "raw_text": raw,
+            "processed_text": processed,
+            "source": dataset_name
+        })
 
-        document_repo.upsert_document(db, document)
         count += 1
 
-        if count % 1000 == 0:
-            document_repo.commit(db)
-            print(count)
+        if len(buffer) >= BATCH_SIZE:
+            batch_start = time.time()
+            document_repo.bulk_upsert_documents(db, buffer)
+            batch_end = time.time()
+            print(f"[Batch Commit] ✅ Committed {len(buffer)} docs | Total so far: {count} "
+                  f"| Progress: {count/MAX_DOCS:.2%} | Batch time: {batch_end - batch_start:.2f}s")
+            buffer.clear()
 
-    document_repo.commit(db)
+    if buffer:
+        batch_start = time.time()
+        document_repo.bulk_upsert_documents(db, buffer)
+        batch_end = time.time()
+        print(f"[Final Commit] ✅ Committed {len(buffer)} docs | Total: {count} "
+              f"| Final batch time: {batch_end - batch_start:.2f}s")
+
+    total_time = time.time() - start_time
+    print(f"[Done] 🎉 Finished loading {count} documents from {dataset_name} in {total_time:.2f} seconds")
+
     return f"event: done\ndata: Finished loading {count} documents\n\n"
