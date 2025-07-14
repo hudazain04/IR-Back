@@ -17,6 +17,7 @@ from models.search_result import SearchResult
 from fastapi.middleware.cors import CORSMiddleware
 
 
+
 app = FastAPI()
 origins = [
     "http://localhost:5173",  # Vite dev server

@@ -9,7 +9,6 @@ from repositories import document_repo
 import time
 
 router = APIRouter()
-
 def load_dataset(dataset_name: str, db: Session):
     try:
         dataset = ir_datasets.load(dataset_name)
@@ -19,9 +18,12 @@ def load_dataset(dataset_name: str, db: Session):
 
     processor = TextProcessor()
     count = 0
-    
+    MAX_DOCS = 330_000
+
     for doc in dataset.docs_iter():
-        # doc_id = f"{dataset_name}:{doc.doc_id}"
+        if count >= MAX_DOCS:
+            break
+
         raw = doc.text
         processed = " ".join(processor.normalize(raw))
 
@@ -35,12 +37,9 @@ def load_dataset(dataset_name: str, db: Session):
         document_repo.upsert_document(db, document)
         count += 1
 
-
-        # Optionally, commit periodically every N docs or every few seconds
         if count % 1000 == 0:
             document_repo.commit(db)
             print(count)
 
     document_repo.commit(db)
     return f"event: done\ndata: Finished loading {count} documents\n\n"
-

@@ -164,64 +164,218 @@ class SearchService:
 
     
 
+    # def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=False):
+    #     bm25, doc_ids, doc_texts = self.load_bm25_assets(dataset_name)
+    #     tokens = self.processor.normalize(query)
+
+    #     if with_index:
+    #         inverted_index = self.load_inverted_index(dataset_name)
+    #         matched_ids = set()
+    #         for token in tokens:
+    #             matched_ids.update(inverted_index.get(token, []))
+
+    #         if not matched_ids:
+    #             return []
+
+    #         # Map matched doc_ids to their indices for fast scoring
+    #         id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
+    #         filtered_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
+
+    #         if not filtered_indices:
+    #             return []
+
+    #         cache_key = (query, dataset_name, frozenset(matched_ids))
+    #         if cache_key in self.bm25_score_cache:
+    #             scores = self.bm25_score_cache[cache_key]
+    #         else:
+    #             # Efficient batch scoring only on filtered indices
+    #             scores = bm25.get_batch_scores(tokens, filtered_indices)
+    #             self.bm25_score_cache[cache_key] = scores
+
+    #         filtered_ids = [doc_ids[i] for i in filtered_indices]
+    #         filtered_texts = [doc_texts[i] for i in filtered_indices]
+
+    #     else:
+    #         scores = bm25.get_scores(tokens)
+    #         filtered_ids = doc_ids
+    #         filtered_texts = doc_texts
+
+    #     if len(scores) == 0:
+    #         return []
+
+    #     scores_array = np.array(scores)
+
+    #     if len(scores_array) <= top_k:
+    #         top_indices = np.argsort(-scores_array)
+    #     else:
+    #         # Get top_k indices with highest scores efficiently
+    #         top_indices = np.argpartition(scores_array, -top_k)[-top_k:]
+    #         # Sort those top_k indices by score descending
+    #         top_indices = top_indices[np.argsort(-scores_array[top_indices])]
+
+    #     return [
+    #         {"doc_id": filtered_ids[i], "text": filtered_texts[i], "score": float(scores_array[i])}
+    #         for i in top_indices
+    #     ]
+
+
+
+    # def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=False):
+    #     bm25, doc_ids, doc_texts = self.load_bm25_assets(dataset_name)
+    #     tokens = self.processor.normalize(query)
+
+    #     if not tokens:
+    #         return []
+
+    #     id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
+
+    #     if with_index:
+    #         inverted_index = self.load_inverted_index(dataset_name)
+
+    #         matched_ids = set().union(*(inverted_index.get(token, []) for token in tokens))
+    #         if not matched_ids:
+    #             return []
+
+    #         matched_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
+    #         if not matched_indices:
+    #             return []
+
+    #         cache_key = (query, dataset_name, frozenset(matched_ids))
+    #         scores = self.bm25_score_cache.get(cache_key)
+    #         if scores is None:
+    #             scores = bm25.get_batch_scores(tokens, matched_indices)
+    #             self.bm25_score_cache[cache_key] = scores
+
+    #         # Direct list slicing — faster than NumPy for small-medium
+    #         filtered_ids = [doc_ids[i] for i in matched_indices]
+    #         filtered_texts = [doc_texts[i] for i in matched_indices]
+    #     else:
+    #         scores = bm25.get_scores(tokens)
+    #         if not scores:
+    #             return []
+    #         filtered_ids = doc_ids
+    #         filtered_texts = doc_texts
+
+    #     # Top-K selection
+    #     if not scores:
+    #         return []
+
+    #     scores_array = np.array(scores)
+    #     if len(scores_array) <= top_k:
+    #         top_indices = np.argsort(-scores_array)
+    #     else:
+    #         top_indices = np.argpartition(-scores_array, top_k)[:top_k]
+    #         top_indices = top_indices[np.argsort(-scores_array[top_indices])]
+
+    #     return [
+    #         {"doc_id": filtered_ids[i], "text": filtered_texts[i], "score": float(scores_array[i])}
+    #         for i in top_indices
+    #     ]
+
+
+
     def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=False):
         bm25, doc_ids, doc_texts = self.load_bm25_assets(dataset_name)
         tokens = self.processor.normalize(query)
 
+        if not tokens:
+            return []
+
+        id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
+
         if with_index:
             inverted_index = self.load_inverted_index(dataset_name)
-            matched_ids = set()
-            for token in tokens:
-                matched_ids.update(inverted_index.get(token, []))
-
+            matched_ids = set().union(*(inverted_index.get(token, []) for token in tokens))
             if not matched_ids:
                 return []
 
-            # Map matched doc_ids to their indices for fast scoring
-            id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
-            filtered_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
-
-            if not filtered_indices:
+            matched_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
+            if not matched_indices:
                 return []
 
             cache_key = (query, dataset_name, frozenset(matched_ids))
-            if cache_key in self.bm25_score_cache:
-                scores = self.bm25_score_cache[cache_key]
-            else:
-                # Efficient batch scoring only on filtered indices
-                scores = bm25.get_batch_scores(tokens, filtered_indices)
+            scores = self.bm25_score_cache.get(cache_key)
+            if scores is None:
+                scores = bm25.get_batch_scores(tokens, matched_indices)
                 self.bm25_score_cache[cache_key] = scores
 
-            filtered_ids = [doc_ids[i] for i in filtered_indices]
-            filtered_texts = [doc_texts[i] for i in filtered_indices]
-
+            filtered_ids = [doc_ids[i] for i in matched_indices]
+            filtered_texts = [doc_texts[i] for i in matched_indices]
         else:
             scores = bm25.get_scores(tokens)
+            if scores is None or len(scores) == 0:
+                return []
             filtered_ids = doc_ids
             filtered_texts = doc_texts
 
-        if len(scores) == 0:
-            return []
-
         scores_array = np.array(scores)
+        if len(scores_array) == 0:
+            return []
 
         if len(scores_array) <= top_k:
             top_indices = np.argsort(-scores_array)
         else:
-            # Get top_k indices with highest scores efficiently
-            top_indices = np.argpartition(scores_array, -top_k)[-top_k:]
-            # Sort those top_k indices by score descending
+            top_indices = np.argpartition(-scores_array, top_k)[:top_k]
             top_indices = top_indices[np.argsort(-scores_array[top_indices])]
 
         return [
             {"doc_id": filtered_ids[i], "text": filtered_texts[i], "score": float(scores_array[i])}
             for i in top_indices
-        ]
+    ]
 
 
 
 
-   
+    # def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=False):
+    #     bm25, doc_ids, doc_texts = self.load_bm25_assets(dataset_name)
+    #     tokens = self.processor.normalize(query)
+
+    #     # Map doc IDs to their indices
+    #     id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
+
+    #     if with_index:
+    #         inverted_index = self.load_inverted_index(dataset_name)
+
+    #         # Bulk match document IDs using set union
+    #         matched_ids = set().union(*(inverted_index.get(token, []) for token in tokens))
+    #         if not matched_ids:
+    #             return []
+
+    #         # Use NumPy array for fast lookup
+    #         matched_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
+    #         if not matched_indices:
+    #             return []
+
+    #         cache_key = (query, dataset_name, frozenset(matched_ids))
+    #         scores = self.bm25_score_cache.get(cache_key)
+
+    #         if scores is None:
+    #             scores = bm25.get_batch_scores(tokens, matched_indices)
+    #             self.bm25_score_cache[cache_key] = scores
+
+    #         filtered_ids = np.array(doc_ids)[matched_indices]
+    #         filtered_texts = np.array(doc_texts)[matched_indices]
+    #     else:
+    #         scores = bm25.get_scores(tokens)
+    #         filtered_ids = doc_ids
+    #         filtered_texts = doc_texts
+
+    #     scores_array = np.array(scores)
+    #     if len(scores_array) == 0:
+    #         return []
+
+    #     # Fast top-k retrieval
+    #     if len(scores_array) <= top_k:
+    #         top_indices = np.argsort(-scores_array)
+    #     else:
+    #         top_indices = np.argpartition(scores_array, -top_k)[-top_k:]
+    #         top_indices = top_indices[np.argsort(-scores_array[top_indices])]
+
+    #     return [
+    #         {"doc_id": filtered_ids[i], "text": filtered_texts[i], "score": float(scores_array[i])}
+    #         for i in top_indices
+    #     ]
+    
 
     
 
