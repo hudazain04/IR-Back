@@ -1,9 +1,7 @@
-import asyncio
-from fastapi import APIRouter, Depends
+
+from fastapi import APIRouter
 from sqlalchemy.orm import Session
-from fastapi.responses import StreamingResponse
 import ir_datasets
-from models.document import Document
 from services.processor import TextProcessor
 from repositories import document_repo
 import time

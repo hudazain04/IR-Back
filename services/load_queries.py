@@ -2,7 +2,6 @@ import ir_datasets
 from sqlalchemy.orm import Session
 from repositories import query_repo
 from models.query import Query
-from database import SessionLocal
 from fastapi import APIRouter
 
 router = APIRouter()
@@ -33,8 +32,3 @@ def load_queries_to_db(dataset_name , db : Session):
     query_repo.commit(db)
     print(f"✅ All {count} queries inserted into DB.")
     return {"status": "success", "message":f"✅ All {count} queries inserted into DB."}
-
-
-# if __name__ == "__main__":
-#     db = SessionLocal()
-#     load_queries_to_db(db)

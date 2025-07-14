@@ -1,9 +1,7 @@
 import ir_datasets
-from sqlalchemy.orm import Session
 from repositories import qrels_repo
 from models.qrels import Qrel
 
-from database import SessionLocal
 
 from fastapi import APIRouter
 
@@ -34,6 +32,3 @@ def load_qrels_to_db(dataset_name , db):
     return {"status": "success", "message":f"✅ Inserted {count} qrels into the database."}
 
 
-# if __name__ == "__main__":
-#     db = SessionLocal()
-#     load_qrels_to_db(db)

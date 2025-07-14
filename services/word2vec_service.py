@@ -24,18 +24,11 @@ def build_word2vec_for_dataset(dataset_name: str, db: Session):
 
     vectors = np.array([w2v.vectorize(tokens) for tokens in tokenized_docs])
     output_dir = os.path.join("vector_store_word2vec", dataset_name)
-    os.makedirs(output_dir, exist_ok=True)  # Create nested dirs like vector_store_word2vec/beir/quora/dev
+    os.makedirs(output_dir, exist_ok=True) 
 
     joblib.dump(w2v.model, os.path.join(output_dir, "w2v_model.joblib"))
     joblib.dump(doc_ids, os.path.join(output_dir, "doc_ids.joblib"))
     joblib.dump(doc_raws, os.path.join(output_dir, "doc_texts.joblib"))
     joblib.dump(vectors, os.path.join(output_dir, "w2v_matrix.joblib"))
-
-    # os.makedirs("vector_store_word2vec", exist_ok=True)
-
-    # joblib.dump(w2v.model, f"vector_store_word2vec/{dataset_name}_w2v_model.joblib")
-    # joblib.dump(doc_ids, f"vector_store_word2vec/{dataset_name}_doc_ids.joblib")
-    # joblib.dump(doc_raws, f"vector_store_word2vec/{dataset_name}_doc_texts.joblib")
-    # joblib.dump(vectors, f"vector_store_word2vec/{dataset_name}_w2v_matrix.joblib")
 
     return {"status": "success", "message": f"Word2Vec index built and saved for dataset '{dataset_name}'"}

@@ -1,4 +1,3 @@
-# routes/inverted_index_api.py
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session

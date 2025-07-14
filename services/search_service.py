@@ -8,7 +8,9 @@ from rank_bm25 import BM25Okapi
 import faiss
 from collections import Counter
 from sklearn.preprocessing import normalize
+import time
 from services.word2vec_representation import Word2VecRepresentation
+import heapq
 
 class SearchService:
     def __init__(self):
@@ -71,7 +73,7 @@ class SearchService:
         except FileNotFoundError as e:
             raise ValueError("Word2Vec joblib files not found.") from e
 
-        w2v_matrix = normalize(w2v_matrix, axis=1)  # Normalize once
+        w2v_matrix = normalize(w2v_matrix, axis=1) 
 
         self.w2v_model = w2v_model
         self.w2v_matrix = w2v_matrix
@@ -146,7 +148,6 @@ class SearchService:
 
             distances, neighbors = faiss_index.search(query_vector, top_k)
 
-            # Use the filtered IDs and texts
             doc_ids, doc_texts = list(filtered_ids), list(filtered_texts)
         else:
             distances, neighbors = index.search(query_vector, top_k)
@@ -156,226 +157,105 @@ class SearchService:
             {
                 "doc_id": doc_ids[neighbors[0][i]],
                 "text": doc_texts[neighbors[0][i]],
-                "distance": float(distances[0][i]),  # Distance not similarity
-                "score": float(1 / (1 + distances[0][i]))  # Optional similarity-like score
+                "distance": float(distances[0][i]), 
+                "score": float(1 / (1 + distances[0][i])) 
             }
             for i in range(len(neighbors[0]))
         ]
 
     
 
-    # def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=False):
-    #     bm25, doc_ids, doc_texts = self.load_bm25_assets(dataset_name)
-    #     tokens = self.processor.normalize(query)
-
-    #     if with_index:
-    #         inverted_index = self.load_inverted_index(dataset_name)
-    #         matched_ids = set()
-    #         for token in tokens:
-    #             matched_ids.update(inverted_index.get(token, []))
-
-    #         if not matched_ids:
-    #             return []
-
-    #         # Map matched doc_ids to their indices for fast scoring
-    #         id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
-    #         filtered_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
-
-    #         if not filtered_indices:
-    #             return []
-
-    #         cache_key = (query, dataset_name, frozenset(matched_ids))
-    #         if cache_key in self.bm25_score_cache:
-    #             scores = self.bm25_score_cache[cache_key]
-    #         else:
-    #             # Efficient batch scoring only on filtered indices
-    #             scores = bm25.get_batch_scores(tokens, filtered_indices)
-    #             self.bm25_score_cache[cache_key] = scores
-
-    #         filtered_ids = [doc_ids[i] for i in filtered_indices]
-    #         filtered_texts = [doc_texts[i] for i in filtered_indices]
-
-    #     else:
-    #         scores = bm25.get_scores(tokens)
-    #         filtered_ids = doc_ids
-    #         filtered_texts = doc_texts
-
-    #     if len(scores) == 0:
-    #         return []
-
-    #     scores_array = np.array(scores)
-
-    #     if len(scores_array) <= top_k:
-    #         top_indices = np.argsort(-scores_array)
-    #     else:
-    #         # Get top_k indices with highest scores efficiently
-    #         top_indices = np.argpartition(scores_array, -top_k)[-top_k:]
-    #         # Sort those top_k indices by score descending
-    #         top_indices = top_indices[np.argsort(-scores_array[top_indices])]
-
-    #     return [
-    #         {"doc_id": filtered_ids[i], "text": filtered_texts[i], "score": float(scores_array[i])}
-    #         for i in top_indices
-    #     ]
+    
 
 
 
-    # def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=False):
-    #     bm25, doc_ids, doc_texts = self.load_bm25_assets(dataset_name)
-    #     tokens = self.processor.normalize(query)
 
-    #     if not tokens:
-    #         return []
+    def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=True):
+        start_total = time.perf_counter()
+        t0 = time.perf_counter()
+        if dataset_name not in self.bm25_cache:
+            self.bm25_cache[dataset_name] = self.load_bm25_assets(dataset_name)
+        bm25, doc_ids, doc_texts = self.bm25_cache[dataset_name]
+        print(f"⏱️ Load BM25 assets: {time.perf_counter() - t0:.4f}s")
 
-    #     id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
-
-    #     if with_index:
-    #         inverted_index = self.load_inverted_index(dataset_name)
-
-    #         matched_ids = set().union(*(inverted_index.get(token, []) for token in tokens))
-    #         if not matched_ids:
-    #             return []
-
-    #         matched_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
-    #         if not matched_indices:
-    #             return []
-
-    #         cache_key = (query, dataset_name, frozenset(matched_ids))
-    #         scores = self.bm25_score_cache.get(cache_key)
-    #         if scores is None:
-    #             scores = bm25.get_batch_scores(tokens, matched_indices)
-    #             self.bm25_score_cache[cache_key] = scores
-
-    #         # Direct list slicing — faster than NumPy for small-medium
-    #         filtered_ids = [doc_ids[i] for i in matched_indices]
-    #         filtered_texts = [doc_texts[i] for i in matched_indices]
-    #     else:
-    #         scores = bm25.get_scores(tokens)
-    #         if not scores:
-    #             return []
-    #         filtered_ids = doc_ids
-    #         filtered_texts = doc_texts
-
-    #     # Top-K selection
-    #     if not scores:
-    #         return []
-
-    #     scores_array = np.array(scores)
-    #     if len(scores_array) <= top_k:
-    #         top_indices = np.argsort(-scores_array)
-    #     else:
-    #         top_indices = np.argpartition(-scores_array, top_k)[:top_k]
-    #         top_indices = top_indices[np.argsort(-scores_array[top_indices])]
-
-    #     return [
-    #         {"doc_id": filtered_ids[i], "text": filtered_texts[i], "score": float(scores_array[i])}
-    #         for i in top_indices
-    #     ]
-
-
-
-    def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=False):
-        bm25, doc_ids, doc_texts = self.load_bm25_assets(dataset_name)
+        t0 = time.perf_counter()
         tokens = self.processor.normalize(query)
-
+        print(f"⏱️ Tokenization: {time.perf_counter() - t0:.4f}s")
         if not tokens:
             return []
 
+        t0 = time.perf_counter()
         id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
+        print(f"⏱️ ID to index map: {time.perf_counter() - t0:.4f}s")
 
         if with_index:
-            inverted_index = self.load_inverted_index(dataset_name)
-            matched_ids = set().union(*(inverted_index.get(token, []) for token in tokens))
+            t0 = time.perf_counter()
+            if dataset_name not in self.inverted_index_cache:
+                self.inverted_index_cache[dataset_name] = self.load_inverted_index(dataset_name)
+            inverted_index = self.inverted_index_cache[dataset_name]
+            print(f"⏱️ Load inverted index: {time.perf_counter() - t0:.4f}s")
+
+            t0 = time.perf_counter()
+            matched_ids = set()
+            for token in tokens:
+                matched_ids.update(inverted_index.get(token, []))
+            print(f"⏱️ Matching doc IDs from index: {time.perf_counter() - t0:.4f}s")
+
             if not matched_ids:
                 return []
 
+            t0 = time.perf_counter()
             matched_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
+            print(f"⏱️ Map matched IDs to indices: {time.perf_counter() - t0:.4f}s")
+
             if not matched_indices:
                 return []
 
-            cache_key = (query, dataset_name, frozenset(matched_ids))
+            t0 = time.perf_counter()
+            cache_key = (dataset_name, tuple(sorted(tokens)), frozenset(matched_ids))
             scores = self.bm25_score_cache.get(cache_key)
             if scores is None:
                 scores = bm25.get_batch_scores(tokens, matched_indices)
                 self.bm25_score_cache[cache_key] = scores
+            print(f"⏱️ Compute BM25 scores (with_index): {time.perf_counter() - t0:.4f}s")
 
             filtered_ids = [doc_ids[i] for i in matched_indices]
             filtered_texts = [doc_texts[i] for i in matched_indices]
         else:
+            t0 = time.perf_counter()
             scores = bm25.get_scores(tokens)
-            if scores is None or len(scores) == 0:
+            print(f"⏱️ Compute BM25 scores (full corpus): {time.perf_counter() - t0:.4f}s")
+
+            if scores is None or (hasattr(scores, 'size') and scores.size == 0) or (isinstance(scores, list) and len(scores) == 0):
                 return []
+
             filtered_ids = doc_ids
             filtered_texts = doc_texts
 
-        scores_array = np.array(scores)
-        if len(scores_array) == 0:
+        if scores is None or len(scores) == 0:
             return []
 
-        if len(scores_array) <= top_k:
-            top_indices = np.argsort(-scores_array)
-        else:
-            top_indices = np.argpartition(-scores_array, top_k)[:top_k]
-            top_indices = top_indices[np.argsort(-scores_array[top_indices])]
+        t0 = time.perf_counter()
+        num_scores = len(scores)
+        top_indices = heapq.nlargest(top_k, range(num_scores), key=lambda i: scores[i])
+        print(f"⏱️ Top-k selection: {time.perf_counter() - t0:.4f}s")
 
-        return [
-            {"doc_id": filtered_ids[i], "text": filtered_texts[i], "score": float(scores_array[i])}
+        t0 = time.perf_counter()
+        results = [
+            {
+                "doc_id": filtered_ids[i],
+                "text": filtered_texts[i],
+                "score": float(scores[i])
+            }
             for i in top_indices
-    ]
+        ]
+        print(f"⏱️ Format results: {time.perf_counter() - t0:.4f}s")
+
+        print(f"✅ Total search time: {time.perf_counter() - start_total:.4f}s\n")
+        return results
 
 
 
-
-    # def search_bm25(self, query: str, dataset_name: str, top_k=5, with_index=False):
-    #     bm25, doc_ids, doc_texts = self.load_bm25_assets(dataset_name)
-    #     tokens = self.processor.normalize(query)
-
-    #     # Map doc IDs to their indices
-    #     id_to_index = {doc_id: i for i, doc_id in enumerate(doc_ids)}
-
-    #     if with_index:
-    #         inverted_index = self.load_inverted_index(dataset_name)
-
-    #         # Bulk match document IDs using set union
-    #         matched_ids = set().union(*(inverted_index.get(token, []) for token in tokens))
-    #         if not matched_ids:
-    #             return []
-
-    #         # Use NumPy array for fast lookup
-    #         matched_indices = [id_to_index[doc_id] for doc_id in matched_ids if doc_id in id_to_index]
-    #         if not matched_indices:
-    #             return []
-
-    #         cache_key = (query, dataset_name, frozenset(matched_ids))
-    #         scores = self.bm25_score_cache.get(cache_key)
-
-    #         if scores is None:
-    #             scores = bm25.get_batch_scores(tokens, matched_indices)
-    #             self.bm25_score_cache[cache_key] = scores
-
-    #         filtered_ids = np.array(doc_ids)[matched_indices]
-    #         filtered_texts = np.array(doc_texts)[matched_indices]
-    #     else:
-    #         scores = bm25.get_scores(tokens)
-    #         filtered_ids = doc_ids
-    #         filtered_texts = doc_texts
-
-    #     scores_array = np.array(scores)
-    #     if len(scores_array) == 0:
-    #         return []
-
-    #     # Fast top-k retrieval
-    #     if len(scores_array) <= top_k:
-    #         top_indices = np.argsort(-scores_array)
-    #     else:
-    #         top_indices = np.argpartition(scores_array, -top_k)[-top_k:]
-    #         top_indices = top_indices[np.argsort(-scores_array[top_indices])]
-
-    #     return [
-    #         {"doc_id": filtered_ids[i], "text": filtered_texts[i], "score": float(scores_array[i])}
-    #         for i in top_indices
-    #     ]
-    
 
     
 
@@ -444,13 +324,10 @@ class SearchService:
         query_vector = query_vector.reshape(1, -1)
 
         if with_additional:
-        # Use FAISS for fast similarity search
             index, doc_ids, doc_texts = self.load_faiss_assets(dataset_name)
 
-            # Normalize query vector for cosine similarity (inner product)
             faiss.normalize_L2(query_vector)
             
-            # Search top_k similar documents
             D, I = index.search(query_vector, top_k)
 
             return [
@@ -469,129 +346,10 @@ class SearchService:
             ]
 
 
-    # def search_hybrid(self, query: str, dataset_name: str, top_k=5, alpha=0.4, beta=0.3, gamma=0.3, with_index=False,with_additional=False):
-    #     # Load all assets
-    #     vectorizer, tfidf_matrix, doc_ids, doc_texts = self.load_tfidf_assets(dataset_name)
-    #     self.load_word2vec_assets(dataset_name)
-    #     # bm25, _, _ = self.load_bm25_assets(dataset_name)
-
-    #     if with_index:
-    #         doc_ids, doc_texts, indices, tfidf_matrix = self.filter_documents_by_inverted_index(
-    #             query, dataset_name, doc_ids, doc_texts, tfidf_matrix)
-    #         if not doc_ids:
-    #             return []
-
-    #         w2v_matrix = self.w2v_matrix[indices]
-    #         # bm25_indices = indices
-    #     else:
-    #         w2v_matrix = self.w2v_matrix
-    #         # bm25_indices = list(range(len(doc_ids)))
-
-    #     # Preprocess query
-    #     tokens = self.processor.normalize(query)
-
-    #     # TF-IDF vector + sim
-    #     tfidf_vector = vectorizer.transform([" ".join(tokens)])
-    #     sim_tfidf = cosine_similarity(tfidf_vector, tfidf_matrix).flatten()
-    #     sim_tfidf /= sim_tfidf.max() or 1
-
-
-    #        # --- Word2Vec embedding ---
-    #     w2v_query_vec = np.mean(
-    #         [self.w2v_model.wv[w] for w in tokens if w in self.w2v_model.wv]
-    #         or [np.zeros(self.w2v_model.vector_size)],
-    #         axis=0
-    #     ).astype("float32")
-
-       
-    #     if with_additional:
-    #         # FAISS cosine sim (requires normalized vectors and IndexFlatIP)
-    #         faiss.normalize_L2(w2v_query_vec.reshape(1, -1))
-    #         index, faiss_doc_ids, faiss_doc_texts = self.load_faiss_assets(dataset_name)
-    #         distances, neighbors = index.search(w2v_query_vec.reshape(1, -1), len(faiss_doc_ids))
-    #         sim_w2v_faiss = distances[0]  # Already cosine similarity (dot product)
-
-    #         # Align sim_w2v with doc_ids
-    #         id_to_score = {doc_id: score for doc_id, score in zip(faiss_doc_ids, sim_w2v_faiss)}
-    #         sim_w2v = np.array([id_to_score.get(doc_id, 0) for doc_id in doc_ids])
-    #         sim_w2v /= sim_w2v.max() or 1
-    #     else:
-    #         sim_w2v = cosine_similarity([w2v_query_vec], w2v_matrix).flatten()
-    #         sim_w2v /= sim_w2v.max() or 1
-
-
-    #     # BM25 score
-    #     # scores_bm25 = bm25.get_batch_scores(tokens, bm25_indices)
-    #     # scores_bm25 = np.array(scores_bm25)
-    #     # scores_bm25 /= scores_bm25.max() or 1
-
-    #     # Combine all three
-    #     final_scores = (
-    #         alpha * sim_tfidf +
-    #         beta * sim_w2v
-    #     )
-
-    #     # Sort and return top_k
-    #     top_indices = final_scores.argsort()[::-1][:top_k]
-
-    #     return [
-    #         {
-    #             "doc_id": doc_ids[i],
-    #             "text": doc_texts[i],
-    #             "score": float(final_scores[i])
-    #         }
-    #         for i in top_indices
-    #     ]
-
-
-    # def search_hybrid(self, query: str, dataset_name: str, top_k=5, alpha=0.5, beta=0.5, with_index=False, with_additional=False):
-    #     # Load assets
-    #     vectorizer, tfidf_matrix, doc_ids, doc_texts = self.load_tfidf_assets(dataset_name)
-    #     self.load_word2vec_assets(dataset_name)
-
-    #     if with_index:
-    #         doc_ids, doc_texts, indices, tfidf_matrix = self.filter_documents_by_inverted_index(
-    #             query, dataset_name, doc_ids, doc_texts, tfidf_matrix
-    #         )
-    #         if not doc_ids:
-    #             return []
-
-    #         w2v_matrix = self.w2v_matrix[indices]
-    #     else:
-    #         w2v_matrix = self.w2v_matrix
-
-    #     # Preprocess query
-    #     tokens = self.processor.normalize(query)
-
-    #     # --- TF-IDF ---
-    #     tfidf_vector = vectorizer.transform([" ".join(tokens)])
-    #     sim_tfidf = tfidf_matrix.dot(tfidf_vector.T).toarray().ravel()
-
-    #     sim_tfidf /= sim_tfidf.max() or 1
-
-    #     # --- Word2Vec ---
-    #     w2v_query_vec = np.mean(
-    #         [self.w2v_model.wv[word] for word in tokens if word in self.w2v_model.wv]
-    #         or [np.zeros(self.w2v_model.vector_size)],
-    #         axis=0
-    #     ).astype("float32")
-
-    #     sim_w2v = np.dot(w2v_matrix, w2v_query_vec)
-    #     sim_w2v /= sim_w2v.max() or 1
-
-    #     # --- Combine ---
-    #     final_scores = alpha * sim_tfidf + beta * sim_w2v
-    #     top_indices = final_scores.argsort()[::-1][:top_k]
-
-    #     return [
-    #         {"doc_id": doc_ids[i], "text": doc_texts[i], "score": float(final_scores[i])}
-    #         for i in top_indices
-    #     ]
-
-
+    
 
     def search_hybrid(self, query: str, dataset_name: str, top_k=5, alpha=0.5, beta=0.5, with_index=False, with_additional=False):
-        # Load assets
+     
         vectorizer, tfidf_matrix, doc_ids, doc_texts = self.load_tfidf_assets(dataset_name)
         self.load_word2vec_assets(dataset_name)
 
@@ -605,29 +363,23 @@ class SearchService:
         else:
             w2v_matrix = self.w2v_matrix
 
-        # Preprocess query
         tokens = self.processor.normalize(query)
 
-        # --- TF-IDF ---
         tfidf_vector = vectorizer.transform([" ".join(tokens)])
         sim_tfidf = tfidf_matrix.dot(tfidf_vector.T).toarray().ravel()
         sim_tfidf /= sim_tfidf.max() or 1
 
-        # --- Word2Vec Query ---
         w2v_query_vec = np.mean(
             [self.w2v_model.wv[word] for word in tokens if word in self.w2v_model.wv]
             or [np.zeros(self.w2v_model.vector_size)],
             axis=0
         ).astype("float32")
 
-        # --- Word2Vec Similarity ---
         if with_additional:
-            # FAISS for fast similarity
             faiss.normalize_L2(w2v_query_vec.reshape(1, -1))
             index, faiss_doc_ids, faiss_doc_texts = self.load_faiss_assets(dataset_name)
-            distances, neighbors = index.search(w2v_query_vec.reshape(1, -1), top_k * 10)  # only top 50 if top_k=5
+            distances, neighbors = index.search(w2v_query_vec.reshape(1, -1), top_k * 10) 
 
-            # Map scores back to original doc_ids
             id_to_score = {doc_id: score for doc_id, score in zip(faiss_doc_ids, distances[0])}
             sim_w2v = np.array([id_to_score.get(doc_id, 0.0) for doc_id in doc_ids])
         else:
@@ -635,7 +387,6 @@ class SearchService:
 
         sim_w2v /= sim_w2v.max() or 1
 
-        # --- Combine ---
         final_scores = alpha * sim_tfidf + beta * sim_w2v
         top_indices = final_scores.argsort()[::-1][:top_k]
 
@@ -655,7 +406,5 @@ class SearchService:
             return self.search_hybrid(query, dataset_name, top_k, alpha=0.5, with_index=with_index,  with_additional=with_additional)
         elif algorithm == "bm25":
             return self.search_bm25(query, dataset_name, top_k, with_index)
-        # elif algorithm == "faiss":
-        #     return self.search_faiss(query, dataset_name, top_k, with_index)
         else:
             raise ValueError(f"Unknown algorithm: {algorithm}")
